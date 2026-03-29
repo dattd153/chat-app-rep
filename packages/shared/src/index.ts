@@ -1,7 +1,56 @@
+export enum UserStatus {
+  ONLINE = 'online',
+  OFFLINE = 'offline',
+  AWAY = 'away'
+}
+
 export interface User {
   id: string;
-  name: string;
+  username: string;
   email: string;
+  avatar?: string;
+  status: UserStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export enum ChatType {
+  DIRECT = 'direct',
+  GROUP = 'group'
+}
+
+export interface Chat {
+  id: string;
+  type: ChatType;
+  name?: string;
+  lastMessageId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export enum ChatRole {
+  ADMIN = 'admin',
+  MEMBER = 'member'
+}
+
+export interface ChatMember {
+  id: string;
+  chatId: string;
+  userId: string;
+  role: ChatRole;
+  joinedAt: Date;
+}
+
+export enum MessageType {
+  TEXT = 'text',
+  IMAGE = 'image',
+  FILE = 'file'
+}
+
+export enum MessageStatus {
+  SENT = 'sent',
+  DELIVERED = 'delivered',
+  SEEN = 'seen'
 }
 
 export interface Message {
@@ -9,5 +58,37 @@ export interface Message {
   chatId: string;
   senderId: string;
   content: string;
+  type: MessageType;
+  status: MessageStatus;
+  createdAt: Date;
+}
+
+export interface MessageRead {
+  id: string;
+  messageId: string;
+  userId: string;
+  readAt: Date;
+}
+
+export enum FriendStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  BLOCKED = 'blocked'
+}
+
+export interface Friend {
+  id: string;
+  userId: string;
+  friendId: string;
+  status: FriendStatus;
+  createdAt: Date;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  refId: string;
+  isRead: boolean;
   createdAt: Date;
 }
