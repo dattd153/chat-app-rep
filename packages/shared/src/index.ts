@@ -6,7 +6,8 @@ export enum UserStatus {
 
 export interface User {
   id: string;
-  username: string;
+  username?: string;
+  name: string;
   email: string;
   avatar?: string;
   status: UserStatus;
@@ -73,6 +74,7 @@ export interface MessageRead {
 export enum FriendStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
   BLOCKED = 'blocked'
 }
 
@@ -92,3 +94,25 @@ export interface Notification {
   isRead: boolean;
   createdAt: Date;
 }
+
+// Standardized API Response
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data: T | null;
+  error: {
+    code: string;
+    message: string;
+  } | null;
+}
+
+export const successResponse = <T>(data: T): ApiResponse<T> => ({
+  success: true,
+  data,
+  error: null,
+});
+
+export const errorResponse = (code: string, message: string): ApiResponse<null> => ({
+  success: false,
+  data: null,
+  error: { code, message },
+});
