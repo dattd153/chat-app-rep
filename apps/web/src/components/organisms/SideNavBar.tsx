@@ -1,9 +1,24 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
+import { useAuth } from '../../context/AuthContext';
 
 const SideNavBar: React.FC = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      // In a real app, you might want to call the API to invalidate the refresh token
+      // For now, we just clear the local state
+      logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout failed', err);
+    }
+  };
+
   const navItems = [
     { icon: 'chat_bubble', label: 'Chats', path: '/dashboard' },
     { icon: 'group', label: 'Contacts', path: '/contacts' },
@@ -39,15 +54,20 @@ const SideNavBar: React.FC = () => {
       </nav>
 
       <div className="px-4 mt-auto">
-        <div className="flex items-center lg:space-x-4 p-3 rounded-2xl bg-surface-container-high/50 hover:bg-surface-container-high transition-colors cursor-pointer group">
+        <div 
+          onClick={handleLogout}
+          className="flex items-center lg:space-x-4 p-3 rounded-2xl bg-surface-container-high/50 hover:bg-error/10 group transition-all cursor-pointer"
+          title="Logout"
+        >
           <Avatar 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTuDwS87RZMR8IvbG2dM-pVvMoEgyZRnAZZImxy3tSyvuK3PvVOyhj6O-_dpqVU_pyVymcNqaWgzLwqK7-WXR6uxdinNvxwyNswhaPQnecm3YYkrLfkU6EIc5IsPTleu8Fo3l-x5KfMeBIqIUjUO8c10Ztb-GrBsq46XLuvmIYYJzLOEyWKxtuapLC0vxHXL7OgwwQZjuObwpYaSnUh8w_IT8_HaBGNtNZlnaF96c6pPP5lcA_miWtwszFlUaXzvyBpQapdDvCDg"
+            alt={user?.name}
             size="md" 
           />
           <div className="hidden lg:block overflow-hidden">
-            <p className="text-xs font-black text-on-surface truncate group-hover:text-primary transition-colors">Alex Mercer</p>
-            <p className="text-[10px] text-on-surface-variant truncate font-bold opacity-60">Premium Member</p>
+            <p className="text-xs font-black text-on-surface truncate group-hover:text-error transition-colors">{user?.name || 'Guest User'}</p>
+            <p className="text-[10px] text-on-surface-variant truncate font-bold opacity-60 group-hover:text-error/60">Tap to logout</p>
           </div>
+          <Icon name="logout" className="hidden lg:block ml-auto opacity-0 group-hover:opacity-100 text-error transition-all scale-75 group-hover:scale-100" />
         </div>
       </div>
     </aside>
