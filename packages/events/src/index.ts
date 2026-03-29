@@ -1,0 +1,6 @@
+export const EventSubjects = {
+  MESSAGE_CREATED: "MESSAGE_CREATED",
+  MESSAGE_SEEN: "MESSAGE_SEEN",
+  USER_ONLINE: "USER_ONLINE",
+  USER_OFFLINE: "USER_OFFLINE"
+} as const;
