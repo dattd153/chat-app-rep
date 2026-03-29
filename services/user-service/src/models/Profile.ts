@@ -1,33 +1,34 @@
 import mongoose from 'mongoose';
-import { UserStatus } from '@chat-app/shared';
 
 const profileSchema = new mongoose.Schema({
   userId: {
-    type: String,
+    type: String, // Reference to auth user id
     required: true,
     unique: true,
-  },
-  name: {
-    type: String,
-    required: true,
   },
   email: {
     type: String,
     required: true,
   },
+  name: {
+    type: String,
+    required: true,
+  },
   avatar: {
     type: String,
-    default: '',
-  },
-  status: {
-    type: String,
-    enum: Object.values(UserStatus),
-    default: UserStatus.OFFLINE,
   },
   bio: {
     type: String,
-    default: '',
-  }
+  },
+  status: {
+    type: String,
+    enum: ['online', 'offline', 'away'],
+    default: 'offline',
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now,
+  },
 }, {
   timestamps: true,
   toJSON: {
@@ -38,5 +39,8 @@ const profileSchema = new mongoose.Schema({
     }
   }
 });
+
+// Full-text search index
+profileSchema.index({ name: 'text', email: 'text' });
 
 export const Profile = mongoose.model('Profile', profileSchema);

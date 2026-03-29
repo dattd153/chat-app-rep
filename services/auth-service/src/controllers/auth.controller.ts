@@ -81,6 +81,12 @@ export const login = async (req: Request, res: Response) => {
     const { accessToken, refreshToken } = await generateTokens(user);
 
     res.send(successResponse({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
       accessToken,
       refreshToken,
       expiresIn: 900 // 15 mins in seconds

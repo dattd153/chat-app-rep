@@ -49,6 +49,28 @@ app.use('/api/users', createProxyMiddleware({
   pathRewrite: {
     '^/api/users': '/api/users',
   },
+  onError: (err, req, res) => {
+    logger.error('Proxy Error (User Service):', { error: err.message, url: req.url });
+    res.status(502).send({ success: false, error: { code: 'PROXY_ERROR', message: err.message } });
+  }
+}));
+
+// Proxy for Chat Service
+app.use('/api/chats', createProxyMiddleware({
+  target: process.env.CHAT_SERVICE_URL || 'http://localhost:3003',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/chats': '/api/chats',
+  },
+}));
+
+// Proxy for Message Service
+app.use('/api/messages', createProxyMiddleware({
+  target: process.env.MESSAGE_SERVICE_URL || 'http://localhost:3004',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/messages': '/api/messages',
+  },
 }));
 
 app.get('/health', (req, res) => res.json({ status: 'gateway is running' }));
