@@ -87,7 +87,7 @@ export const searchUsers = async (req: Request, res: Response) => {
 // FRIEND SYSTEM CONTROLLERS
 export const sendFriendRequest = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
-  const { userId: targetUserId } = req.body;
+  const targetUserId = req.body.friendId || req.body.userId;
 
   try {
     const existing = await Friend.findOne({ userId, friendId: targetUserId });
@@ -107,7 +107,7 @@ export const sendFriendRequest = async (req: Request, res: Response) => {
 
 export const acceptFriendRequest = async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
-  const { userId: requesterId } = req.body;
+  const requesterId = req.body.friendId || req.body.userId;
 
   try {
     const request = await Friend.findOneAndUpdate(

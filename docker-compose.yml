@@ -49,14 +49,13 @@ services:
 
   mongo:
     image: mongo:latest
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "mongosh --eval \"try { rs.initiate(); } catch (e) { if (e.codeName !== 'AlreadyInitialized') { throw e; } }\" && mongosh --eval \"db.adminCommand('ping')\""]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
 
   # ==========================================
@@ -76,6 +75,8 @@ services:
       - PORT=3000
       - AUTH_SERVICE_URL=http://auth-service:3000
       - USER_SERVICE_URL=http://user-service:3000
+      - CHAT_SERVICE_URL=http://chat-service:3000
+      - MESSAGE_SERVICE_URL=http://message-service:3000
       - JWT_SECRET=super_secret_jwt
     depends_on:
       kafka:
@@ -171,10 +172,9 @@ services:
     ports:
       - "3005:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
       - REDIS_URL=redis://redis:6379
       - KAFKA_BROKERS=kafka:9092
+      - JWT_SECRET=super_secret_jwt
     depends_on:
       redis:
         condition: service_healthy
