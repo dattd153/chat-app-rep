@@ -1,14 +1,32 @@
-export default function App() {
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import './index.css';
+import SideNavBar from './components/organisms/SideNavBar';
+import Dashboard from './pages/Dashboard';
+import Contacts from './pages/Contacts';
+import Profile from './pages/Profile';
+import Login from './pages/Login';
+
+const App: React.FC = () => {
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-100">
-      <div className="text-center p-8 bg-white rounded-xl shadow-lg">
-        <h1 className="text-3xl font-bold tracking-tight text-blue-600 sm:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-          ChatSystem Web UI
-        </h1>
-        <p className="mt-4 text-gray-500">
-          Vite + React + Tailwind + Zustand + Router scaffolding ready!
-        </p>
-      </div>
+    <div className="flex bg-background h-screen w-screen overflow-hidden text-on-surface">
+      {/* Conditionally render SideNavBar if not on login page */}
+      {!isLoginPage && <SideNavBar />}
+
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/contacts" element={<Contacts />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/login" element={<Login />} />
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
     </div>
-  )
-}
+  );
+};
+
+export default App;

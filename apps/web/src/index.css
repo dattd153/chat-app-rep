@@ -163,7 +163,14 @@
 }
 
 /* --- Base Styles --- */
+:root {
+  background-color: var(--color-background);
+  color: var(--color-on-background);
+}
+
 body {
+  margin: 0;
+  overflow: hidden;
   font-family: "Inter", sans-serif;
 }
 
