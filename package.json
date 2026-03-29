@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "start": "docker-compose up -d",
-    "stop": "docker-compose down"
+    "stop": "docker-compose down",
+    "test": "jest",
+    "build:packages": "npm run build --workspaces --if-present"
   },
   "keywords": [
     "chat",
@@ -22,6 +24,9 @@
   "devDependencies": {
     "typescript": "^6.0.0",
     "@types/node": "^20.0.0",
-    "@types/express": "^4.17.21"
+    "@types/express": "^4.17.21",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "@types/jest": "^29.5.12"
   }
 }
