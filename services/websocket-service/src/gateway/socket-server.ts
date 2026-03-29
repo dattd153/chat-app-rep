@@ -1,6 +1,9 @@
 import { Server } from 'socket.io';
 import { logger } from '@chat-app/logger';
 import jwt from 'jsonwebtoken';
+import { SocketEvents, MessageStatus } from '@chat-app/shared';
+import { redisClient, setUserOnline, setUserOffline } from '../redis/client';
+import { kafkaProducer } from '../services/kafka-producer';
 
 export const initSocketServer = (io: Server) => {
   const JWT_SECRET = process.env.JWT_SECRET || 'access_secret';
@@ -22,26 +25,61 @@ export const initSocketServer = (io: Server) => {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     const userId = socket.data.userId;
     logger.info(`User connected: ${userId} (${socket.id})`);
+
+    // 1. Presence: Set user as online
+    await setUserOnline(userId);
+    // Notify others that user is online (e.g., in a public room or specific friends room)
+    io.emit(SocketEvents.USER_ONLINE, { userId });
 
     // Join user-specific room for individual notifications
     socket.join(`user:${userId}`);
 
-    // Join chat rooms
-    socket.on('join-chat', (chatId: string) => {
+    // JOIN/LEAVE CHAT
+    socket.on(SocketEvents.JOIN_CHAT, (chatId: string) => {
       socket.join(`chat:${chatId}`);
       logger.info(`User ${userId} joined chat room: ${chatId}`);
     });
 
-    socket.on('leave-chat', (chatId: string) => {
+    socket.on(SocketEvents.LEAVE_CHAT, (chatId: string) => {
       socket.leave(`chat:${chatId}`);
       logger.info(`User ${userId} left chat room: ${chatId}`);
     });
 
-    socket.on('disconnect', () => {
+    // TYPING INDICATORS
+    socket.on(SocketEvents.TYPING_START, (chatId: string) => {
+      socket.to(`chat:${chatId}`).emit(SocketEvents.TYPING_START, {
+        chatId,
+        userId
+      });
+    });
+
+    socket.on(SocketEvents.TYPING_STOP, (chatId: string) => {
+      socket.to(`chat:${chatId}`).emit(SocketEvents.TYPING_STOP, {
+        chatId,
+        userId
+      });
+    });
+
+    // MESSAGE STATUS (SEEN/DELIVERED)
+    socket.on(SocketEvents.MESSAGE_SEEN, async (payload: { chatId: string, messageId: string }) => {
+      logger.info(`Message ${payload.messageId} seen by ${userId}`);
+      
+      // Emit Kafka event for Message Service to update DB
+      await kafkaProducer.sendEvent('chat-events', 'MESSAGE_SEEN', {
+        chatId: payload.chatId,
+        messageId: payload.messageId,
+        userId: userId
+      });
+    });
+
+    socket.on('disconnect', async () => {
       logger.info(`User disconnected: ${userId}`);
+      // 2. Presence: Remove online status
+      await setUserOffline(userId);
+      io.emit(SocketEvents.USER_OFFLINE, { userId });
     });
   });
 };

@@ -3,6 +3,8 @@ import { app } from './app';
 import { logger } from '@chat-app/logger';
 import { validateEnv } from '@chat-app/config';
 import { startOutboxWorker } from './services/outbox-worker';
+import { connectKafka } from './services/kafka';
+import { startKafkaConsumer } from './services/kafka-consumer';
 
 const start = async () => {
   logger.info('Starting Message Service...');
@@ -15,9 +17,13 @@ const start = async () => {
     await mongoose.connect(MONGO_URI);
     logger.info('Connected to MongoDB');
 
-    // 2. Start Outbox Worker
-    await startOutboxWorker();
-    logger.info('Outbox Worker started');
+    // 2. Connect Kafka & Start Services
+    await connectKafka();
+    await Promise.all([
+      startOutboxWorker(),
+      startKafkaConsumer()
+    ]);
+    logger.info('Message Service: Kafka Worker & Consumer started');
 
     // 3. Start Server
     const PORT = process.env.PORT || 3000;

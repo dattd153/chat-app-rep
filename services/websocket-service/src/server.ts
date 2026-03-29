@@ -6,6 +6,7 @@ import { validateEnv } from '@chat-app/config';
 import { setupRedisAdapter } from './redis/adapter';
 import { initSocketServer } from './gateway/socket-server';
 import { startKafkaConsumer } from './services/kafka-consumer';
+import { kafkaProducer } from './services/kafka-producer';
 
 const start = async () => {
   logger.info('Starting WebSocket Service...');
@@ -26,8 +27,12 @@ const start = async () => {
     // 2. Initialize Socket Logic
     initSocketServer(io);
 
-    // 3. Start Kafka Consumer
-    await startKafkaConsumer(io);
+    // 3. Start Kafka (Consumer & Producer)
+    const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',');
+    await Promise.all([
+      startKafkaConsumer(io),
+      kafkaProducer.connect()
+    ]);
 
     // 4. Start Server
     const PORT = process.env.PORT || 3000;
