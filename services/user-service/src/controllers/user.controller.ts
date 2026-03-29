@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import { Profile } from '../models/Profile';
 import { Friend } from '../models/Friend';
+import { Outbox } from '../models/Outbox';
 import { logger } from '@chat-app/logger';
 import { successResponse, errorResponse, FriendStatus } from '@chat-app/shared';
+import mongoose from 'mongoose';
 
 // PROFILE CONTROLLERS
 export const getMyProfile = async (req: Request, res: Response) => {
@@ -95,10 +97,31 @@ export const sendFriendRequest = async (req: Request, res: Response) => {
       return res.status(400).send(errorResponse('ALREADY_SENT', 'Request already exists or already friends'));
     }
 
-    const request = new Friend({ userId, friendId: targetUserId, status: FriendStatus.PENDING });
-    await request.save();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    res.send(successResponse({ success: true }));
+    try {
+      const request = new Friend({ userId, friendId: targetUserId, status: FriendStatus.PENDING });
+      await request.save({ session });
+
+      const outbox = new Outbox({
+        eventType: 'FRIEND_REQUEST_CREATED',
+        payload: {
+          requesterId: userId,
+          recipientId: targetUserId,
+          status: FriendStatus.PENDING
+        }
+      });
+      await outbox.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      res.send(successResponse({ success: true }));
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
   } catch (err) {
     logger.error('Friend request failed', { userId, targetUserId, error: err });
     res.status(500).send(errorResponse('INTERNAL_ERROR', 'Failed to send request'));
@@ -110,20 +133,43 @@ export const acceptFriendRequest = async (req: Request, res: Response) => {
   const requesterId = req.body.friendId || req.body.userId;
 
   try {
-    const request = await Friend.findOneAndUpdate(
-      { userId: requesterId, friendId: userId, status: FriendStatus.PENDING },
-      { $set: { status: FriendStatus.ACCEPTED } },
-      { new: true }
-    );
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!request) {
-      return res.status(404).send(errorResponse('NOT_FOUND', 'Request not found'));
+    try {
+      const request = await Friend.findOneAndUpdate(
+        { userId: requesterId, friendId: userId, status: FriendStatus.PENDING },
+        { $set: { status: FriendStatus.ACCEPTED } },
+        { new: true, session }
+      );
+
+      if (!request) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).send(errorResponse('NOT_FOUND', 'Request not found'));
+      }
+
+      // Also create a reciprocal relationship
+      await Friend.create([{ userId, friendId: requesterId, status: FriendStatus.ACCEPTED }], { session });
+
+      const outbox = new Outbox({
+        eventType: 'FRIEND_REQUEST_ACCEPTED',
+        payload: {
+          requesterId,
+          recipientId: userId,
+          status: FriendStatus.ACCEPTED
+        }
+      });
+      await outbox.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      res.send(successResponse({ success: true }));
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
     }
-
-    // Also create a reciprocal relationship (Senior move for easy querying)
-    await Friend.create({ userId, friendId: requesterId, status: FriendStatus.ACCEPTED });
-
-    res.send(successResponse({ success: true }));
   } catch (err) {
     logger.error('Accept friend failed', { userId, requesterId, error: err });
     res.status(500).send(errorResponse('INTERNAL_ERROR', 'Failed to accept friend'));

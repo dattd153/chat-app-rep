@@ -11,5 +11,6 @@ app.use(express.json());
 app.post('/api/chats', chatController.createChat);
 app.get('/api/chats', chatController.getChats);
 app.post('/api/chats/:chatId/members', chatController.addMember);
+app.get('/api/chats/:chatId/members', chatController.getChatMembers);
 
 app.get('/health', (req, res) => res.json({ status: 'chat-service is running' }));

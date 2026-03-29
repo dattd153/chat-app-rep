@@ -4,7 +4,13 @@
   "main": "dist/server.js",
   "scripts": { "start": "node dist/server.js", "build": "tsc" },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "kafkajs": "^2.2.4",
+    "axios": "^1.6.2",
+    "@chat-app/logger": "1.0.0",
+    "@chat-app/config": "1.0.0",
+    "@chat-app/shared": "1.0.0"
   },
   "devDependencies": {
     "typescript": "^6.0.0",
