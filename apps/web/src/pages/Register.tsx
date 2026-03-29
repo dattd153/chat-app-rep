@@ -4,7 +4,8 @@ import Icon from '../components/atoms/Icon';
 import { authService } from '../services/auth.service';
 import { useAuth } from '../context/AuthContext';
 
-const Login: React.FC = () => {
+const Register: React.FC = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,11 +20,13 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const data = await authService.login(email, password);
-      login(data.accessToken, data.user);
+      const data = await authService.register(email, password, name);
+      // Registration only returns userId and tokens. 
+      // We log in with these data.
+      login(data.accessToken, { id: data.userId, email, name });
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -42,26 +45,42 @@ const Login: React.FC = () => {
         
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-12">
-          <div className="w-16 h-16 bg-primary-container rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl shadow-primary-container/30 transform rotate-6 transition-transform hover:rotate-0 cursor-default">
-            <Icon name="forum" fill className="text-white text-[32px]" />
+          <div className="w-16 h-16 bg-primary-container rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl shadow-primary-container/30 transform -rotate-6 transition-transform hover:rotate-0 cursor-default">
+            <Icon name="person_add" fill className="text-white text-[32px]" />
           </div>
-          <h1 className="text-4xl font-black tracking-tighter text-on-surface mb-2">Dialogue</h1>
-          <p className="text-on-surface-variant font-bold text-sm tracking-wide opacity-80 uppercase tracking-widest">Experience the art of conversation.</p>
+          <h1 className="text-4xl font-black tracking-tighter text-on-surface mb-2">Join Dialogue</h1>
+          <p className="text-on-surface-variant font-bold text-sm tracking-wide opacity-80 uppercase tracking-widest">Connect with the world.</p>
         </div>
 
         {/* Auth Card */}
         <div className="bg-surface-container-lowest rounded-[3rem] p-12 shadow-[0_32px_64px_rgba(0,0,0,0.06)] border border-outline-variant/10 relative">
-          <h2 className="text-2xl font-black text-on-surface mb-10 tracking-tight">Welcome back</h2>
+          <h2 className="text-2xl font-black text-on-surface mb-10 tracking-tight">Create account</h2>
           
-          <form className="space-y-8" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="p-4 bg-error-container text-on-error-container rounded-2xl text-xs font-black uppercase tracking-widest animate-shake">
                 {error}
               </div>
             )}
 
+            {/* Name Field */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-on-surface-variant uppercase tracking-[0.2em] ml-2" htmlFor="name">Full Name</label>
+              <div className="relative group">
+                <input 
+                  id="name"
+                  type="text" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="John Doe"
+                  required
+                  className="w-full h-16 px-6 bg-surface-container-highest border-none rounded-2xl text-on-surface font-bold placeholder:text-on-surface-variant/40 focus:ring-4 focus:ring-primary/10 transition-all duration-300 outline-none"
+                />
+              </div>
+            </div>
+
             {/* Email Field */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="block text-xs font-black text-on-surface-variant uppercase tracking-[0.2em] ml-2" htmlFor="email">Email Address</label>
               <div className="relative group">
                 <input 
@@ -77,11 +96,8 @@ const Login: React.FC = () => {
             </div>
 
             {/* Password Field */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center ml-2 pr-2">
-                <label className="block text-xs font-black text-on-surface-variant uppercase tracking-[0.2em]" htmlFor="password">Password</label>
-                <a href="#" className="text-xs font-black text-primary hover:underline decoration-2 underline-offset-4 transition-all">Forgot?</a>
-              </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-on-surface-variant uppercase tracking-[0.2em] ml-2" htmlFor="password">Password</label>
               <div className="relative group">
                 <input 
                   id="password"
@@ -99,9 +115,9 @@ const Login: React.FC = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full h-16 bg-primary-container text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 transition-all duration-200 flex items-center justify-center gap-3 mt-4"
+              className="w-full h-16 bg-primary-container text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 transition-all duration-200 flex items-center justify-center gap-3 mt-6"
             >
-              <span>{isLoading ? 'Processing...' : 'Log In'}</span>
+              <span>{isLoading ? 'Creating Account...' : 'Sign Up'}</span>
               {!isLoading && <Icon name="arrow_forward" className="text-[20px]" />}
             </button>
           </form>
@@ -112,7 +128,7 @@ const Login: React.FC = () => {
               <div className="w-full border-t border-outline-variant/30"></div>
             </div>
             <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em] font-black">
-              <span className="px-6 bg-surface-container-lowest text-on-surface-variant/60">Or continue with</span>
+              <span className="px-6 bg-surface-container-lowest text-on-surface-variant/60">Or join with</span>
             </div>
           </div>
 
@@ -130,8 +146,8 @@ const Login: React.FC = () => {
 
         {/* Footer Links */}
         <p className="mt-10 text-center text-sm text-on-surface-variant font-bold opacity-80">
-          Don't have an account? 
-          <Link to="/register" className="text-primary font-black hover:underline decoration-2 underline-offset-4 ml-2 transition-all">Create Account</Link>
+          Already have an account? 
+          <Link to="/login" className="text-primary font-black hover:underline decoration-2 underline-offset-4 ml-2 transition-all">Log In</Link>
         </p>
 
         {/* Legal Links */}
@@ -145,4 +161,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Register;

@@ -10,7 +10,7 @@ interface AvatarProps {
 
 const Avatar: React.FC<AvatarProps> = ({ 
   src, 
-  alt = 'User avatar', 
+  alt = 'User', 
   size = 'md', 
   status = 'none', 
   className = '' 
@@ -29,12 +29,18 @@ const Avatar: React.FC<AvatarProps> = ({
     xl: 'w-6 h-6 border-4',
   };
 
+  // Premium initials avatar fallback using ui-avatars.com
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(alt)}&background=6366f1&color=fff&bold=true&size=128`;
+
   return (
     <div className={`relative inline-block ${className}`}>
       <img
-        src={src || 'https://via.placeholder.com/150'}
+        src={src || defaultAvatar}
         alt={alt}
-        className={`${sizes[size]} rounded-full object-cover border-2 border-surface-container-lowest`}
+        className={`${sizes[size]} rounded-full object-cover border-2 border-surface-container-lowest shadow-sm`}
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = defaultAvatar;
+        }}
       />
       {status !== 'none' && (
         <span 
