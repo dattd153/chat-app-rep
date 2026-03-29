@@ -1,6 +1,5 @@
 import React from 'react';
 import Avatar from '../atoms/Avatar';
-import Badge from '../atoms/Badge';
 
 interface ChatItemProps {
   name: string;
