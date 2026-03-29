@@ -30,6 +30,9 @@ const messageSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+  seenAt: {
+    type: Date,
+  },
 }, {
   timestamps: true,
   toJSON: {

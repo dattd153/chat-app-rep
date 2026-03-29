@@ -1,17 +1,9 @@
-import { Kafka } from 'kafkajs';
 import { Outbox } from '../models/Outbox';
 import { logger } from '@chat-app/logger';
-
-const kafka = new Kafka({
-  clientId: 'message-service-worker',
-  brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
-});
-
-const producer = kafka.producer();
+import { producer } from './kafka';
 
 export const startOutboxWorker = async () => {
-  await producer.connect();
-  logger.info('Outbox Worker: Kafka producer connected');
+  logger.info('Outbox Worker started');
 
   // Simple polling worker
   setInterval(async () => {

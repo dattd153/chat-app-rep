@@ -1,6 +1,7 @@
 import { Kafka } from 'kafkajs';
 import { Server } from 'socket.io';
 import { logger } from '@chat-app/logger';
+import { SocketEvents } from '@chat-app/shared';
 
 export const startKafkaConsumer = async (io: Server) => {
   const kafka = new Kafka({
@@ -23,19 +24,40 @@ export const startKafkaConsumer = async (io: Server) => {
         const event = JSON.parse(message.value.toString());
         const { type, data } = event;
 
-        if (type === 'MESSAGE_CREATED') {
-          const { chatId, messageId, senderId, content, createdAt } = data;
-          
-          // Emit to all users in the chat room
-          io.to(`chat:${chatId}`).emit('new-message', {
-            id: messageId,
-            chatId,
-            senderId,
-            content,
-            createdAt
-          });
+        switch (type) {
+          case 'MESSAGE_CREATED': {
+            const { chatId, messageId, senderId, content, createdAt } = data;
+            io.to(`chat:${chatId}`).emit(SocketEvents.NEW_MESSAGE, {
+              id: messageId,
+              chatId,
+              senderId,
+              content,
+              createdAt,
+              status: 'sent'
+            });
+            break;
+          }
 
-          logger.info(`Broadcasted message ${messageId} to chat ${chatId}`);
+          case 'MESSAGE_STATUS_UPDATED': {
+            const { chatId, messageId, status, userId } = data;
+            // Emit status update to the room
+            // If status is SEEN, we emit MESSAGE_SEEN
+            const eventType = status === 'seen' ? SocketEvents.MESSAGE_SEEN : SocketEvents.MESSAGE_DELIVERED;
+            io.to(`chat:${chatId}`).emit(eventType, {
+              messageId,
+              chatId,
+              status,
+              userId
+            });
+            break;
+          }
+
+          case 'USER_STATUS_CHANGED': {
+            const { userId, status } = data;
+            const eventType = status === 'online' ? SocketEvents.USER_ONLINE : SocketEvents.USER_OFFLINE;
+            io.emit(eventType, { userId, status });
+            break;
+          }
         }
       } catch (err) {
         logger.error('Failed to process Kafka event in WebSocket Service', err);
