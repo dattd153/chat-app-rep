@@ -100,3 +100,15 @@ export const addMember = async (req: Request, res: Response) => {
     res.status(500).json(errorResponse('INTERNAL_ERROR', err.message));
   }
 };
+
+export const getChatMembers = async (req: Request, res: Response) => {
+  const { chatId } = req.params;
+
+  try {
+    const members = await ChatMember.find({ chatId });
+    res.json(successResponse(members.map(m => m.userId)));
+  } catch (err: any) {
+    logger.error('Get chat members failed', err);
+    res.status(500).json(errorResponse('INTERNAL_ERROR', err.message));
+  }
+};

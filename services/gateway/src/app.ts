@@ -73,4 +73,13 @@ app.use('/api/messages', createProxyMiddleware({
   },
 }));
 
+// Proxy for Notification Service
+app.use('/api/notifications', createProxyMiddleware({
+  target: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/notifications': '/api/notifications',
+  },
+}));
+
 app.get('/health', (req, res) => res.json({ status: 'gateway is running' }));
