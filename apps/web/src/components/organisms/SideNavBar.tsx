@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+import NotificationDropdown from './NotificationDropdown';
 
 const SideNavBar: React.FC = () => {
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const navigate = useNavigate();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const handleLogout = async () => {
     try {
-      // In a real app, you might want to call the API to invalidate the refresh token
-      // For now, we just clear the local state
       logout();
       navigate('/login');
     } catch (err) {
@@ -51,6 +53,33 @@ const SideNavBar: React.FC = () => {
             )}
           </NavLink>
         ))}
+
+        {/* Notification Bell */}
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className={`
+              w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 ease-in-out
+              ${showNotifications 
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm font-bold' 
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-50 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 font-medium'}
+            `}
+          >
+            <div className="relative">
+              <Icon name="notifications" fill={showNotifications} className="text-[24px]" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-[10px] text-white font-bold ring-2 ring-slate-100 dark:ring-slate-950">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className="hidden lg:inline text-sm">Notifications</span>
+          </button>
+
+          {showNotifications && (
+            <NotificationDropdown onClose={() => setShowNotifications(false)} />
+          )}
+        </div>
       </nav>
 
       <div className="px-4 mt-auto">

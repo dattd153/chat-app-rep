@@ -36,6 +36,9 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy Vite build output to Nginx hosting directory
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
+# Copy custom Nginx configuration
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+
 # Expose generic port 80
 EXPOSE 80
 

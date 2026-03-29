@@ -17,11 +17,16 @@ export const app = express();
 app.use(cors());
 app.use(json());
 
-// Auth Middleware Mock (Wait for Gateway implementation)
-// For now, let's assume userId is passed in headers or skip for dev-sync
-// In a real monorepo, we'd have a shared @chat-app/auth-middleware
+// Auth Middleware (Wait for Gateway implementation)
 const authMock = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const userId = req.headers['x-user-id'] as string;
+  
+  if (!userId && !req.path.includes('/health')) {
+    logger.warn('Missing x-user-id header', { path: req.path });
+    // In many cases we want 401, but some internal calls might bypass
+    // For now, let's keep it informative but strict for user routes
+  }
+
   (req as any).user = { userId };
   next();
 };

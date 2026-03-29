@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ChatHeader from '../components/organisms/ChatHeader';
 import MessageInput from '../components/organisms/MessageInput';
 import ChatItem from '../components/molecules/ChatItem';
 import MessageBubble from '../components/molecules/MessageBubble';
 import Icon from '../components/atoms/Icon';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { chatService, Chat } from '../services/chat.service';
 import { messageService, Message } from '../services/message.service';
 import { userService, UserProfile } from '../services/user.service';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useNotifications();
+  const navigate = useNavigate();
   const [chats, setChats] = useState<Chat[]>([]);
+  // ... state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
@@ -33,12 +38,49 @@ const Dashboard: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
+  // WebSocket Listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (payload: any) => {
+      console.log('Real-time message received:', payload);
+      
+      // 1. If message belongs to active chat, append it
+      if (payload.chatId === activeChatId) {
+        setMessages((prev: Message[]) => {
+          // Avoid duplicates (e.g. if we just sent it and also received the socket event)
+          if (prev.find((m: Message) => m._id === payload.id)) return prev;
+          return [...prev, {
+            _id: payload.id,
+            chatId: payload.chatId,
+            senderId: payload.senderId,
+            content: payload.content,
+            createdAt: payload.createdAt,
+            status: payload.status
+          } as Message];
+        });
+      }
+
+      // 2. Always refresh conversations to update Last Message in the sidebar
+      fetchConversations();
+    };
+
+    socket.on('new-message', handleNewMessage);
+
+    return () => {
+      socket.off('new-message', handleNewMessage);
+    };
+  }, [socket, activeChatId, fetchConversations]);
+
   // Fetch messages and other user details when activeChatId changes
   useEffect(() => {
     const loadChatDetails = async () => {
-      if (!activeChatId || !user) return;
+      if (!activeChatId || !user || !socket) return;
 
       try {
+        // Join the chat room via socket
+        socket.emit('join-chat', activeChatId);
+
         // Find the active chat object
         const chat = chats.find(c => c._id === activeChatId);
         if (chat) {
@@ -59,7 +101,13 @@ const Dashboard: React.FC = () => {
     };
 
     loadChatDetails();
-  }, [activeChatId, user, chats]);
+
+    return () => {
+      if (activeChatId && socket) {
+        socket.emit('leave-chat', activeChatId);
+      }
+    };
+  }, [activeChatId, user, chats, socket]);
 
   const handleSendMessage = async (content: string) => {
     if (!activeChatId || !user) return;
@@ -90,7 +138,10 @@ const Dashboard: React.FC = () => {
         <header className="p-6 space-y-6">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-black tracking-tight text-on-surface">Messages</h1>
-            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white shadow-lg active:scale-95 transition-transform hover:opacity-90">
+            <button 
+              onClick={() => navigate('/contacts?tab=search')}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white shadow-lg active:scale-95 transition-transform hover:opacity-90"
+            >
               <Icon name="add" className="text-[24px]" />
             </button>
           </div>

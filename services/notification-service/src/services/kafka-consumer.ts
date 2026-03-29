@@ -33,7 +33,7 @@ export class KafkaConsumer {
           const event = JSON.parse(message.value.toString());
           const { type, data } = event;
 
-          logger.info(`Notification Service: Processing event ${type} from topic ${topic}`);
+          logger.info(`Notification Service: Processing event ${type} from topic ${topic}`, { data });
 
           switch (type) {
             case 'MESSAGE_CREATED': {

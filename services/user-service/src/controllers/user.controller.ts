@@ -122,9 +122,9 @@ export const sendFriendRequest = async (req: Request, res: Response) => {
       session.endSession();
       throw err;
     }
-  } catch (err) {
-    logger.error('Friend request failed', { userId, targetUserId, error: err });
-    res.status(500).send(errorResponse('INTERNAL_ERROR', 'Failed to send request'));
+  } catch (err: any) {
+    logger.error('Friend request failed', { userId, targetUserId, error: err.message });
+    res.status(500).send(errorResponse('INTERNAL_ERROR', `Failed to send request: ${err.message}`));
   }
 };
 

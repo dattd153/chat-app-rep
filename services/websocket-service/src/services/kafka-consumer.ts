@@ -13,16 +13,19 @@ export const startKafkaConsumer = async (io: Server) => {
 
   await consumer.connect();
   await consumer.subscribe({ topic: 'chat-events', fromBeginning: false });
+  await consumer.subscribe({ topic: 'user-events', fromBeginning: false });
 
-  logger.info('WebSocket Service: Kafka consumer connected');
+  logger.info('WebSocket Service: Kafka consumer connected and topics subscribed');
 
   await consumer.run({
-    eachMessage: async ({ message }) => {
+    eachMessage: async ({ topic, message }) => {
       if (!message.value) return;
 
       try {
         const event = JSON.parse(message.value.toString());
         const { type, data } = event;
+
+        logger.info(`WebSocket Service: Received event ${type} from topic ${topic}`);
 
         switch (type) {
           case 'MESSAGE_CREATED': {
@@ -34,6 +37,25 @@ export const startKafkaConsumer = async (io: Server) => {
               content,
               createdAt,
               status: 'sent'
+            });
+            break;
+          }
+
+          case 'FRIEND_REQUEST_CREATED': {
+            const { recipientId } = data;
+            // Emit to the specific user room
+            io.to(`user:${recipientId}`).emit('NOTIFICATION_RECEIVED', {
+              type: 'friend_request',
+              data
+            });
+            break;
+          }
+
+          case 'FRIEND_REQUEST_ACCEPTED': {
+            const { requesterId } = data;
+            io.to(`user:${requesterId}`).emit('NOTIFICATION_RECEIVED', {
+              type: 'friend_accepted',
+              data
             });
             break;
           }

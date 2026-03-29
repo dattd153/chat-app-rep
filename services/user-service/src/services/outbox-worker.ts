@@ -15,6 +15,7 @@ export const startOutboxWorker = async () => {
       for (const rawEvent of pendingEvents) {
         const event = rawEvent as any;
         try {
+          logger.info(`User Service Outbox: Sending event ${event.eventType} for recipient ${event.payload.recipientId}`, { payload: event.payload });
           await producer.send({
             topic: 'user-events',
             messages: [

@@ -31,55 +31,38 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
 
 app.use(authMiddleware);
 
-// Proxy for Auth Service
-app.use('/api/auth', createProxyMiddleware({
-  target: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
+// Helper for consistent proxy configuration
+const proxyOptions = (target: string) => ({
+  target,
   changeOrigin: true,
-  pathRewrite: {
-    // Contract: /api/auth/register -> Auth Service: /api/auth/register
-    // My Auth service already has /api/auth prefix in app.ts
-    '^/api/auth': '/api/auth', 
-  },
-}));
+  onProxyReq: (proxyReq: any, req: any) => {
+    if (req.headers['x-user-id']) {
+      proxyReq.setHeader('x-user-id', req.headers['x-user-id']);
+    }
+  }
+});
+
+// Proxy for Auth Service
+app.use('/api/auth', createProxyMiddleware(proxyOptions(process.env.AUTH_SERVICE_URL || 'http://localhost:3001')));
 
 // Proxy for User Service
-app.use('/api/users', createProxyMiddleware({
-  target: process.env.USER_SERVICE_URL || 'http://localhost:3002',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api/users': '/api/users',
-  },
-  onError: (err, req, res) => {
-    logger.error('Proxy Error (User Service):', { error: err.message, url: req.url });
-    res.status(502).send({ success: false, error: { code: 'PROXY_ERROR', message: err.message } });
-  }
-}));
+app.use('/api/users', createProxyMiddleware(proxyOptions(process.env.USER_SERVICE_URL || 'http://localhost:3002')));
 
 // Proxy for Chat Service
-app.use('/api/chats', createProxyMiddleware({
-  target: process.env.CHAT_SERVICE_URL || 'http://localhost:3003',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api/chats': '/api/chats',
-  },
-}));
+app.use('/api/chats', createProxyMiddleware(proxyOptions(process.env.CHAT_SERVICE_URL || 'http://localhost:3003')));
 
 // Proxy for Message Service
-app.use('/api/messages', createProxyMiddleware({
-  target: process.env.MESSAGE_SERVICE_URL || 'http://localhost:3004',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api/messages': '/api/messages',
-  },
-}));
+app.use('/api/messages', createProxyMiddleware(proxyOptions(process.env.MESSAGE_SERVICE_URL || 'http://localhost:3004')));
 
 // Proxy for Notification Service
-app.use('/api/notifications', createProxyMiddleware({
-  target: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006',
+app.use('/api/notifications', createProxyMiddleware(proxyOptions(process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006')));
+
+// Proxy for WebSocket Service (Socket.io)
+app.use('/socket.io', createProxyMiddleware({
+  target: process.env.WEBSOCKET_SERVICE_URL || 'http://websocket-service:3000',
+  ws: true,
   changeOrigin: true,
-  pathRewrite: {
-    '^/api/notifications': '/api/notifications',
-  },
+  logLevel: 'debug'
 }));
 
 app.get('/health', (req, res) => res.json({ status: 'gateway is running' }));
