@@ -30,14 +30,35 @@ export const startKafkaConsumer = async (io: Server) => {
         switch (type) {
           case 'MESSAGE_CREATED': {
             const { chatId, messageId, senderId, content, createdAt } = data;
-            io.to(`chat:${chatId}`).emit(SocketEvents.NEW_MESSAGE, {
+            
+            const payload = {
               id: messageId,
               chatId,
               senderId,
               content,
               createdAt,
               status: 'sent'
-            });
+            };
+
+            // 1. Emit to chat room (for currently active participants)
+            io.to(`chat:${chatId}`).emit(SocketEvents.NEW_MESSAGE, payload);
+
+            // 2. Emit directly to each participant's user room (for offline or unjoined participants)
+            try {
+              const res = await fetch(`http://chat-service:3000/api/chats/${chatId}/members`);
+              if (res.ok) {
+                const membersData = await res.json();
+                const participantIds = membersData.data || [];
+                
+                participantIds.forEach((pId: string) => {
+                  io.to(`user:${pId}`).emit(SocketEvents.NEW_MESSAGE, payload);
+                });
+                logger.info(`Routed MESSAGE_CREATED to ${participantIds.length} members of chat ${chatId}`);
+              }
+            } catch (err) {
+              logger.error(`Failed to route MESSAGE_CREATED over members for chat ${chatId}`, err);
+            }
+
             break;
           }
 

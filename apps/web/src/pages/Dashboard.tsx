@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ChatHeader from '../components/organisms/ChatHeader';
 import MessageInput from '../components/organisms/MessageInput';
 import ChatItem from '../components/molecules/ChatItem';
@@ -15,6 +15,7 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useNotifications();
   const navigate = useNavigate();
+  const location = useLocation();
   const [chats, setChats] = useState<Chat[]>([]);
   // ... state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -27,16 +28,33 @@ const Dashboard: React.FC = () => {
     try {
       const data = await chatService.getChats();
       setChats(data);
+      // Join all chat rooms to receive real-time updates for any conversation
+      if (socket) {
+        data.forEach(chat => {
+          socket.emit('join-chat', chat.id);
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch chats', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [socket]);
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Handle auto-opening chat from URL query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cId = params.get('chatId');
+    if (cId) {
+      setActiveChatId(cId);
+      // Clean up the URL to prevent re-triggering
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   // WebSocket Listeners
   useEffect(() => {
@@ -49,9 +67,9 @@ const Dashboard: React.FC = () => {
       if (payload.chatId === activeChatId) {
         setMessages((prev: Message[]) => {
           // Avoid duplicates (e.g. if we just sent it and also received the socket event)
-          if (prev.find((m: Message) => m._id === payload.id)) return prev;
+          if (prev.find((m: Message) => m.id === payload.id)) return prev;
           return [...prev, {
-            _id: payload.id,
+            id: payload.id,
             chatId: payload.chatId,
             senderId: payload.senderId,
             content: payload.content,
@@ -61,8 +79,25 @@ const Dashboard: React.FC = () => {
         });
       }
 
-      // 2. Always refresh conversations to update Last Message in the sidebar
-      fetchConversations();
+      // 2. Update conversations locally to show Last Message in the sidebar
+      setChats((prev: Chat[]) => {
+        const existingChat = prev.find(c => c.id === payload.chatId);
+        if (existingChat) {
+          return prev.map(c => 
+            c.id === payload.chatId 
+              ? { 
+                  ...c, 
+                  lastMessage: { content: payload.content, senderId: payload.senderId, createdAt: payload.createdAt },
+                  updatedAt: payload.createdAt
+                }
+              : c
+          ).sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+        } else {
+          // If it's a new chat, fetch conversations to load it
+          fetchConversations();
+          return prev;
+        }
+      });
     };
 
     socket.on('new-message', handleNewMessage);
@@ -78,14 +113,12 @@ const Dashboard: React.FC = () => {
       if (!activeChatId || !user || !socket) return;
 
       try {
-        // Join the chat room via socket
-        socket.emit('join-chat', activeChatId);
-
         // Find the active chat object
-        const chat = chats.find(c => c._id === activeChatId);
+        const chat = chats.find(c => c.id === activeChatId);
         if (chat) {
           // Identify the "other" participant
-          const otherId = chat.participants.find(id => id !== user.id);
+          const participants = await chatService.getChatMembers(activeChatId);
+          const otherId = participants.find((id: string) => id !== user.id);
           if (otherId) {
             const profile = await userService.getUser(otherId);
             setOtherUser(profile);
@@ -103,9 +136,8 @@ const Dashboard: React.FC = () => {
     loadChatDetails();
 
     return () => {
-      if (activeChatId && socket) {
-        socket.emit('leave-chat', activeChatId);
-      }
+      // We no longer leave the chat room on dismount of activeChatId, 
+      // because we want to keep listening to background chats for the sidebar.
     };
   }, [activeChatId, user, chats, socket]);
 
@@ -116,7 +148,7 @@ const Dashboard: React.FC = () => {
       setMessages((prev: Message[]) => [...prev, newMsg]);
       // Update the last message in the chat list locally
       setChats((prev: Chat[]) => prev.map(c => 
-        c._id === activeChatId 
+        c.id === activeChatId 
           ? { ...c, lastMessage: { content, senderId: user.id, createdAt: new Date().toISOString() }, updatedAt: new Date().toISOString() }
           : c
       ));
@@ -170,15 +202,15 @@ const Dashboard: React.FC = () => {
           ) : (
             chats.map(chat => (
               <ChatItem 
-                key={chat._id}
+                key={chat.id}
                 name={chat.name || "Conversation"} 
                 lastMessage={chat.lastMessage?.content || "No messages yet"}
                 time={formatTime(chat.updatedAt)}
                 unreadCount={0}
                 status="online"
-                isActive={activeChatId === chat._id}
+                isActive={activeChatId === chat.id}
                 avatarSrc="" 
-                onClick={() => setActiveChatId(chat._id)}
+                onClick={() => setActiveChatId(chat.id)}
               />
             ))
           )}
@@ -206,7 +238,7 @@ const Dashboard: React.FC = () => {
 
               {messages.map(msg => (
                 <MessageBubble 
-                  key={msg._id}
+                  key={msg.id}
                   content={msg.content}
                   time={formatTime(msg.createdAt)}
                   direction={msg.senderId === user?.id ? 'outbound' : 'inbound'}

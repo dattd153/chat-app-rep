@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { userService, UserProfile } from '../services/user.service';
 import Avatar from '../components/atoms/Avatar';
 import Icon from '../components/atoms/Icon';
 import ContactSearch from '../components/molecules/ContactSearch';
 import { useNotifications } from '../context/NotificationContext';
+import { chatService } from '../services/chat.service';
 
 const Contacts: React.FC = () => {
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as 'all' | 'pending' | 'search') || 'all';
-  
+
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'search'>(initialTab);
   const [loading, setLoading] = useState(true);
   const { notifications, markAsRead } = useNotifications();
+  const navigate = useNavigate();
 
   const fetchFriends = async () => {
     setLoading(true);
@@ -43,9 +45,23 @@ const Contacts: React.FC = () => {
     }
   };
 
+  const handleStartChat = async (friendId: string) => {
+    try {
+      const chat = await chatService.createChat([friendId]);
+      const chatId = chat.id;
+      if (chatId) {
+        navigate(`/dashboard?chatId=${chatId}`);
+      } else {
+        console.error('Chat created but ID is missing', chat);
+      }
+    } catch (err) {
+      console.error('Failed to create or navigate to chat', err);
+    }
+  };
+
   return (
     <div className="flex flex-1 md:ml-20 lg:ml-64 bg-surface h-screen overflow-hidden animate-fade-in">
-      <section className="w-full flex flex-col bg-surface-container-low max-w-4xl mx-auto shadow-sm p-8">
+      <section className="w-full flex flex-col bg-surface-container-low max-w-4xl shadow-sm p-8">
         <header className="mb-10 flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-black tracking-tighter text-on-surface">Contacts</h1>
@@ -58,8 +74,8 @@ const Contacts: React.FC = () => {
                 onClick={() => setActiveTab(tab)}
                 className={`
                   px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all
-                  ${activeTab === tab 
-                    ? 'bg-primary text-white shadow-md' 
+                  ${activeTab === tab
+                    ? 'bg-primary text-white shadow-md'
                     : 'text-on-surface-variant hover:text-on-surface'}
                 `}
               >
@@ -100,7 +116,10 @@ const Contacts: React.FC = () => {
                         {friend.online ? 'Online now' : 'Offline'}
                       </p>
                     </div>
-                    <button className="w-10 h-10 flex items-center justify-center rounded-2xl bg-surface-container-high hover:bg-primary hover:text-white transition-all">
+                    <button
+                      onClick={() => handleStartChat(friend.id)}
+                      className="w-10 h-10 flex items-center justify-center rounded-2xl bg-surface-container-high hover:bg-primary hover:text-white transition-all"
+                    >
                       <Icon name="chat" className="text-lg" />
                     </button>
                   </div>
@@ -113,8 +132,8 @@ const Contacts: React.FC = () => {
             <div className="space-y-4">
               {pendingRequests.length === 0 ? (
                 <div className="py-20 text-center opacity-20">
-                   <Icon name="inbox" className="text-[120px] mb-6" />
-                   <h2 className="text-2xl font-black">No pending requests</h2>
+                  <Icon name="inbox" className="text-[120px] mb-6" />
+                  <h2 className="text-2xl font-black">No pending requests</h2>
                 </div>
               ) : (
                 pendingRequests.map((req) => (
@@ -131,12 +150,12 @@ const Contacts: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                       <button 
-                         onClick={() => handleAccept(req.refId, req._id)}
-                         className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all"
-                       >
-                         Accept
-                       </button>
+                      <button
+                        onClick={() => handleAccept(req.refId, req._id)}
+                        className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all"
+                      >
+                        Accept
+                      </button>
                     </div>
                   </div>
                 ))

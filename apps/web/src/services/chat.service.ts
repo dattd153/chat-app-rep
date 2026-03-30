@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = '/api/chats';
 
 export interface Chat {
-  _id: string;
+  id: string;
   name?: string;
   type: 'private' | 'group';
   participants: string[];
@@ -28,7 +28,10 @@ export const chatService = {
 
   async createChat(participantIds: string[]): Promise<Chat> {
     const token = localStorage.getItem('accessToken');
-    const response = await axios.post(API_URL, { participantIds }, {
+    const response = await axios.post(API_URL, { 
+      type: 'direct', 
+      memberIds: participantIds 
+    }, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data.data;

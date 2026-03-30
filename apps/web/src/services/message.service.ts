@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = '/api/messages';
 
 export interface Message {
-  _id: string;
+  id: string;
   chatId: string;
   senderId: string;
   content: string;
@@ -23,7 +23,18 @@ export const messageService = {
 
   async sendMessage(chatId: string, content: string): Promise<Message> {
     const token = localStorage.getItem('accessToken');
-    const response = await axios.post(API_URL, { chatId, content }, {
+    // Generate a unique ID for idempotency/duplication prevention
+    const clientMessageId = crypto.randomUUID();
+    
+    // type is 'text' by default for now
+    const payload = { 
+      chatId, 
+      content,
+      clientMessageId,
+      type: 'text'
+    };
+    
+    const response = await axios.post(API_URL, payload, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data.data;
