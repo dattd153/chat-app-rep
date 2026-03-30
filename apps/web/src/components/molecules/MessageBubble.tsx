@@ -7,7 +7,7 @@ interface MessageBubbleProps {
   time: string;
   direction: 'inbound' | 'outbound';
   avatarSrc?: string;
-  status?: 'sent' | 'delivered' | 'read';
+  status?: 'sent' | 'delivered' | 'seen';
   className?: string;
 }
 
@@ -46,8 +46,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </span>
         {!isInbound && (
           <Icon 
-            name={status === 'read' ? 'done_all' : 'done'} 
-            className={`text-sm ${status === 'read' ? 'text-indigo-500' : 'text-on-surface-variant'} font-bold`}
+            name={status === 'seen' ? 'done_all' : 'done'} 
+            className={`text-sm ${status === 'seen' ? 'text-indigo-500' : 'text-on-surface-variant'} font-bold`}
           />
         )}
       </div>

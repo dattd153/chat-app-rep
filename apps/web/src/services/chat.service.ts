@@ -5,7 +5,7 @@ const API_URL = '/api/chats';
 export interface Chat {
   id: string;
   name?: string;
-  type: 'private' | 'group';
+  type: 'direct' | 'group';
   participants: string[];
   lastMessage?: {
     content: string;
@@ -28,6 +28,8 @@ export const chatService = {
 
   async createChat(participantIds: string[]): Promise<Chat> {
     const token = localStorage.getItem('accessToken');
+    // We only need the other person's ID for direct chat creation
+    // The backend session will identify the creator
     const response = await axios.post(API_URL, { 
       type: 'direct', 
       memberIds: participantIds 

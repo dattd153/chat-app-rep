@@ -20,6 +20,11 @@ const chatSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Message',
   },
+  lastMessage: {
+    content: String,
+    senderId: String,
+    createdAt: Date,
+  },
 }, {
   timestamps: true,
   toJSON: {

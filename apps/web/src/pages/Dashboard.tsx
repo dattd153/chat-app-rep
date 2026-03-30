@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ChatHeader from '../components/organisms/ChatHeader';
 import MessageInput from '../components/organisms/MessageInput';
@@ -10,18 +10,24 @@ import { useNotifications } from '../context/NotificationContext';
 import { chatService, Chat } from '../services/chat.service';
 import { messageService, Message } from '../services/message.service';
 import { userService, UserProfile } from '../services/user.service';
+import { SocketEvents, MessageStatus } from '@chat-app/shared';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+  
   const [chats, setChats] = useState<Chat[]>([]);
-  // ... state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
+  const [participantProfiles, setParticipantProfiles] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(true);
+  
+  // Real-time states
+  const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({}); // chatId -> array of userIds
+  const [presence, setPresence] = useState<Record<string, 'online' | 'offline'>>({});
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -31,7 +37,7 @@ const Dashboard: React.FC = () => {
       // Join all chat rooms to receive real-time updates for any conversation
       if (socket) {
         data.forEach(chat => {
-          socket.emit('join-chat', chat.id);
+          socket.emit(SocketEvents.JOIN_CHAT, chat.id);
         });
       }
     } catch (err) {
@@ -45,13 +51,48 @@ const Dashboard: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
+  // Fetch profiles for all participants in the chat list
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      if (chats.length === 0 || !user) return;
+      
+      const uniqueOtherIds = new Set<string>();
+      chats.forEach(chat => {
+        chat.participants.forEach(pid => {
+          if (pid !== user.id && !participantProfiles[pid]) {
+            uniqueOtherIds.add(pid);
+          }
+        });
+      });
+
+      if (uniqueOtherIds.size === 0) return;
+
+      const newProfiles: Record<string, UserProfile> = { ...participantProfiles };
+      let updated = false;
+
+      await Promise.all(Array.from(uniqueOtherIds).map(async (id) => {
+        const profile = await userService.getUser(id);
+        if (profile) {
+          newProfiles[id] = profile;
+          updated = true;
+        }
+      }));
+
+      if (updated) {
+        setParticipantProfiles(newProfiles);
+      }
+    };
+
+    fetchProfiles();
+  }, [chats, user]);
+
   // Handle auto-opening chat from URL query parameter
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const cId = params.get('chatId');
     if (cId) {
       setActiveChatId(cId);
-      // Clean up the URL to prevent re-triggering
+      // Clean up the URL
       navigate('/dashboard', { replace: true });
     }
   }, [location.search, navigate]);
@@ -61,93 +102,160 @@ const Dashboard: React.FC = () => {
     if (!socket) return;
 
     const handleNewMessage = (payload: any) => {
-      console.log('Real-time message received:', payload);
-      
-      // 1. If message belongs to active chat, append it
+      // Clear typing status for this user when they send a message
+      setTypingUsers(prev => ({
+        ...prev,
+        [payload.chatId]: (prev[payload.chatId] || []).filter(id => id !== payload.senderId)
+      }));
+
       if (payload.chatId === activeChatId) {
-        setMessages((prev: Message[]) => {
-          // Avoid duplicates (e.g. if we just sent it and also received the socket event)
-          if (prev.find((m: Message) => m.id === payload.id)) return prev;
-          return [...prev, {
-            id: payload.id,
-            chatId: payload.chatId,
-            senderId: payload.senderId,
-            content: payload.content,
-            createdAt: payload.createdAt,
-            status: payload.status
-          } as Message];
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === payload.id)) return prev;
+          return [...prev, { ...payload } as Message];
         });
+        
+        // Auto-emit seen if we are in this chat
+        socket.emit(SocketEvents.MESSAGE_SEEN, { chatId: payload.chatId, messageId: payload.id });
       }
 
-      // 2. Update conversations locally to show Last Message in the sidebar
-      setChats((prev: Chat[]) => {
+      setChats((prev) => {
         const existingChat = prev.find(c => c.id === payload.chatId);
         if (existingChat) {
           return prev.map(c => 
             c.id === payload.chatId 
               ? { 
                   ...c, 
-                  lastMessage: { content: payload.content, senderId: payload.senderId, createdAt: payload.createdAt },
+                  lastMessage: { 
+                    content: payload.content, 
+                    senderId: payload.senderId, 
+                    createdAt: payload.createdAt 
+                  },
                   updatedAt: payload.createdAt
                 }
               : c
           ).sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
         } else {
-          // If it's a new chat, fetch conversations to load it
+          // If the chat doesn't exist in our list yet, fetch all conversations
+          // This handles the case where someone sends us a first message
           fetchConversations();
           return prev;
         }
       });
     };
 
-    socket.on('new-message', handleNewMessage);
+    const handleTypingStart = (data: { chatId: string, userId: string }) => {
+      setTypingUsers(prev => {
+        const current = prev[data.chatId] || [];
+        if (current.includes(data.userId)) return prev;
+        return { ...prev, [data.chatId]: [...current, data.userId] };
+      });
+    };
+
+    const handleTypingStop = (data: { chatId: string, userId: string }) => {
+      setTypingUsers(prev => ({
+        ...prev,
+        [data.chatId]: (prev[data.chatId] || []).filter(id => id !== data.userId)
+      }));
+    };
+
+    const handleMessageSeen = (data: { messageId: string, chatId: string, userId: string }) => {
+      if (data.chatId === activeChatId) {
+        setMessages((prev: Message[]) => prev.map((m: Message) => 
+          m.id === data.messageId ? { ...m, status: MessageStatus.SEEN as any } : m
+        ));
+      }
+    };
+
+    const handlePresence = (data: { userId: string, status?: string }, isOnline: boolean) => {
+      const status = isOnline ? 'online' : 'offline';
+      setPresence(prev => ({ ...prev, [data.userId]: status }));
+      
+      // Update otherUser if it's the one we're chatting with
+      setOtherUser(prev => (prev && prev.id === data.userId ? { ...prev, status } : prev));
+    };
+
+    socket.on(SocketEvents.NEW_MESSAGE, handleNewMessage);
+    socket.on(SocketEvents.TYPING_START, handleTypingStart);
+    socket.on(SocketEvents.TYPING_STOP, handleTypingStop);
+    socket.on(SocketEvents.MESSAGE_SEEN, handleMessageSeen);
+    socket.on(SocketEvents.USER_ONLINE, (data: any) => handlePresence(data, true));
+    socket.on(SocketEvents.USER_OFFLINE, (data: any) => handlePresence(data, false));
 
     return () => {
-      socket.off('new-message', handleNewMessage);
+      socket.off(SocketEvents.NEW_MESSAGE, handleNewMessage);
+      socket.off(SocketEvents.TYPING_START, handleTypingStart);
+      socket.off(SocketEvents.TYPING_STOP, handleTypingStop);
+      socket.off(SocketEvents.MESSAGE_SEEN, handleMessageSeen);
+      socket.off(SocketEvents.USER_ONLINE);
+      socket.off(SocketEvents.USER_OFFLINE);
     };
   }, [socket, activeChatId, fetchConversations]);
+
+  // Mark all unread messages as seen when entering chat
+  useEffect(() => {
+    if (activeChatId && messages.length > 0 && socket && user) {
+      const unread = messages.filter((m: Message) => m.senderId !== user.id && (m.status as string) !== (MessageStatus.SEEN as string));
+      unread.forEach((m: Message) => {
+        socket.emit(SocketEvents.MESSAGE_SEEN, { chatId: activeChatId, messageId: m.id });
+      });
+    }
+  }, [activeChatId, messages, socket, user]);
 
   // Fetch messages and other user details when activeChatId changes
   useEffect(() => {
     const loadChatDetails = async () => {
-      if (!activeChatId || !user || !socket) return;
+      if (!activeChatId || !user) return;
 
       try {
-        // Find the active chat object
         const chat = chats.find(c => c.id === activeChatId);
         if (chat) {
-          // Identify the "other" participant
           const participants = await chatService.getChatMembers(activeChatId);
           const otherId = participants.find((id: string) => id !== user.id);
           if (otherId) {
             const profile = await userService.getUser(otherId);
-            setOtherUser(profile);
+            if (profile) {
+              // Inject real-time presence
+              const currentStatus = presence[otherId] || profile.status || 'offline';
+              setOtherUser({ ...profile, status: currentStatus });
+            }
           }
         }
 
-        // Fetch messages
         const msgs = await messageService.getMessages(activeChatId);
-        setMessages(msgs);
+        setMessages([...msgs].reverse());
+
+        // Update the chat list's lastMessage if it's missing (helps backfill old conversations)
+        if (msgs.length > 0) {
+          const lastMsg = msgs[0]; // Newest is first from API
+          setChats(prev => prev.map(c => {
+            if (c.id === activeChatId && (!c.lastMessage?.content)) {
+              return {
+                ...c,
+                lastMessage: {
+                  content: lastMsg.content,
+                  senderId: lastMsg.senderId,
+                  createdAt: lastMsg.createdAt
+                },
+                updatedAt: lastMsg.createdAt
+              };
+            }
+            return c;
+          }));
+        }
       } catch (err) {
         console.error('Failed to load chat details', err);
       }
     };
 
     loadChatDetails();
-
-    return () => {
-      // We no longer leave the chat room on dismount of activeChatId, 
-      // because we want to keep listening to background chats for the sidebar.
-    };
-  }, [activeChatId, user, chats, socket]);
+  }, [activeChatId, user]);
 
   const handleSendMessage = async (content: string) => {
     if (!activeChatId || !user) return;
     try {
       const newMsg = await messageService.sendMessage(activeChatId, content);
-      setMessages((prev: Message[]) => [...prev, newMsg]);
-      // Update the last message in the chat list locally
-      setChats((prev: Chat[]) => prev.map(c => 
+      setMessages((prev) => [...prev, newMsg]);
+      setChats((prev) => prev.map(c => 
         c.id === activeChatId 
           ? { ...c, lastMessage: { content, senderId: user.id, createdAt: new Date().toISOString() }, updatedAt: new Date().toISOString() }
           : c
@@ -157,11 +265,35 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleTypingCallback = (isTyping: boolean) => {
+    if (!socket || !activeChatId) return;
+    const event = isTyping ? SocketEvents.TYPING_START : SocketEvents.TYPING_STOP;
+    socket.emit(event, activeChatId);
+  };
+
+  const activeTypingText = useMemo(() => {
+    if (!activeChatId || !typingUsers[activeChatId]?.length) return null;
+    return "is typing...";
+  }, [activeChatId, typingUsers]);
+
   const formatTime = (isoString?: string) => {
     if (!isoString) return '';
     const date = new Date(isoString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (activeChatId) {
+      // Small timeout to ensure DOM is updated
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [messages, activeChatId]);
 
   return (
     <div className="flex flex-1 md:ml-20 lg:ml-64 bg-surface h-screen overflow-hidden animate-fade-in">
@@ -200,19 +332,28 @@ const Dashboard: React.FC = () => {
               <p className="text-sm font-bold">No conversations yet.</p>
             </div>
           ) : (
-            chats.map(chat => (
-              <ChatItem 
-                key={chat.id}
-                name={chat.name || "Conversation"} 
-                lastMessage={chat.lastMessage?.content || "No messages yet"}
-                time={formatTime(chat.updatedAt)}
-                unreadCount={0}
-                status="online"
-                isActive={activeChatId === chat.id}
-                avatarSrc="" 
-                onClick={() => setActiveChatId(chat.id)}
-              />
-            ))
+            chats.map(chat => {
+              const otherParticipantId = chat.type === 'direct' 
+                ? chat.participants?.find((id: string) => id !== user?.id)
+                : null;
+              
+              const profile = otherParticipantId ? participantProfiles[otherParticipantId] : null;
+              const displayName = chat.name || profile?.name || (otherParticipantId ? `User ${otherParticipantId.substring(0, 4)}` : "Conversation");
+              
+              return (
+                <ChatItem 
+                  key={chat.id}
+                  name={displayName} 
+                  lastMessage={typingUsers[chat.id]?.length ? "is typing..." : (chat.lastMessage?.content || "No messages yet")}
+                  time={formatTime(chat.updatedAt)}
+                  unreadCount={0}
+                  status={presence[otherParticipantId || ''] || (participantProfiles[otherParticipantId || '']?.status) || 'offline'} 
+                  isActive={activeChatId === chat.id}
+                  avatarSrc={participantProfiles[otherParticipantId || '']?.avatar || ""} 
+                  onClick={() => setActiveChatId(chat.id)}
+                />
+              );
+            })
           )}
         </div>
       </section>
@@ -224,8 +365,8 @@ const Dashboard: React.FC = () => {
             <ChatHeader 
               name={otherUser?.name || "Chatting..."}
               avatarSrc={otherUser?.avatar || ""}
-              statusText={otherUser?.status || (otherUser ? "Connected" : "...")}
-              isOnline={true}
+              statusText={activeTypingText || otherUser?.status || (otherUser ? "Connected" : "...")}
+              isOnline={otherUser?.status === 'online'}
             />
 
             {/* Message Area */}
@@ -243,15 +384,19 @@ const Dashboard: React.FC = () => {
                   time={formatTime(msg.createdAt)}
                   direction={msg.senderId === user?.id ? 'outbound' : 'inbound'}
                   avatarSrc={msg.senderId === user?.id ? "" : (otherUser?.avatar || "")}
-                  status={msg.status}
+                  status={msg.status as any}
                   className="animate-fade-in"
                 />
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
             <div className="p-6 bg-surface-container-lowest border-t border-outline-variant/10">
-              <MessageInput onSendMessage={handleSendMessage} />
+              <MessageInput 
+                onSendMessage={handleSendMessage} 
+                onTyping={handleTypingCallback}
+              />
             </div>
           </>
         ) : (

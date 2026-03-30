@@ -24,13 +24,21 @@ export const startKafkaConsumer = async () => {
         const { type, data } = event;
 
         if (type === 'MESSAGE_CREATED') {
-          const { chatId, messageId } = data;
+          const { chatId, messageId, senderId, content, createdAt } = data;
           
           await Chat.findByIdAndUpdate(chatId, {
-            $set: { lastMessageId: messageId }
+            $set: { 
+              lastMessageId: messageId,
+              lastMessage: {
+                content,
+                senderId,
+                createdAt: new Date(createdAt)
+              },
+              updatedAt: new Date(createdAt)
+            }
           });
 
-          logger.info(`Updated lastMessageId for chat ${chatId} to ${messageId}`);
+          logger.info(`Updated lastMessage for chat ${chatId} with message ${messageId}`);
         }
       } catch (err) {
         logger.error('Failed to update chat metadata in Chat Service', err);

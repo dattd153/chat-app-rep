@@ -13,12 +13,15 @@ export const createChat = async (req: Request, res: Response) => {
   try {
     // 1. For Direct Chat, check if already exists
     if (type === ChatType.DIRECT) {
-      if (memberIds.length !== 1) {
+      // Standardize memberIds: Filter out creator and ensure only 1 other user
+      const otherUserIds = memberIds.filter((id: string) => id !== creatorId);
+      
+      if (otherUserIds.length !== 1) {
         return res.status(400).json(errorResponse('INVALID_MEMBERS', 'Direct chat must have exactly 1 extra member'));
       }
-      const otherUserId = memberIds[0];
+      const otherUserId = otherUserIds[0];
 
-      // Find common direct chat
+      // Find existing direct chat between these two users
       const existingMember = await ChatMember.aggregate([
         { $match: { userId: { $in: [creatorId, otherUserId] } } },
         { $group: { _id: '$chatId', count: { $sum: 1 } } },
@@ -26,14 +29,16 @@ export const createChat = async (req: Request, res: Response) => {
       ]);
 
       if (existingMember.length > 0) {
-        // Check if any of these is a direct chat
         for (const m of existingMember) {
-          const chat = await Chat.findById(m._id);
-          if (chat && chat.type === ChatType.DIRECT) {
+          const chat = await Chat.findOne({ _id: m._id, type: ChatType.DIRECT });
+          if (chat) {
             return res.json(successResponse(chat));
           }
         }
       }
+      
+      // Update memberIds to only contain the other user (we add creator later)
+      req.body.memberIds = [otherUserId];
     }
 
     // 2. Create Chat
@@ -71,12 +76,32 @@ export const getChats = async (req: Request, res: Response) => {
     const userMemberships = await ChatMember.find({ userId });
     const chatIds = userMemberships.map(m => m.chatId);
 
-    const chats = await Chat.find({ _id: { $in: chatIds } })
-      .sort({ updatedAt: -1 });
+    const chatsWithParticipants = await Chat.aggregate([
+      { $match: { _id: { $in: chatIds } } },
+      {
+        $lookup: {
+          from: 'chatmembers',
+          localField: '_id',
+          foreignField: 'chatId',
+          as: 'members'
+        }
+      },
+      {
+        $project: {
+          id: '$_id',
+          _id: 1,
+          name: 1,
+          type: 1,
+          lastMessage: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          participants: '$members.userId'
+        }
+      },
+      { $sort: { updatedAt: -1 } }
+    ]);
 
-    // In a real app, we might want to populate member details (names/avatars from user-service)
-    // For now, return basic chat info
-    res.json(successResponse(chats));
+    res.json(successResponse(chatsWithParticipants));
   } catch (err: any) {
     logger.error('Get chats failed', err);
     res.status(500).json(errorResponse('INTERNAL_ERROR', err.message));

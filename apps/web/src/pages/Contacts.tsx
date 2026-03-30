@@ -12,34 +12,42 @@ const Contacts: React.FC = () => {
   const initialTab = (searchParams.get('tab') as 'all' | 'pending' | 'search') || 'all';
 
   const [friends, setFriends] = useState<UserProfile[]>([]);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState<UserProfile[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'search'>(initialTab);
   const [loading, setLoading] = useState(true);
   const { notifications, markAsRead } = useNotifications();
   const navigate = useNavigate();
 
-  const fetchFriends = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await userService.getFriendList();
-      setFriends(data);
+      const [friendsData, pendingData] = await Promise.all([
+        userService.getFriendList(),
+        userService.getPendingRequests()
+      ]);
+      setFriends(friendsData);
+      setPendingFriendRequests(pendingData);
     } catch (err) {
-      console.error('Failed to fetch friends', err);
+      console.error('Failed to fetch contact data', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchFriends();
+    fetchData();
   }, []);
-
-  const pendingRequests = notifications.filter(n => n.type === 'friend_request' && !n.isRead);
 
   const handleAccept = async (friendId: string, notificationId?: string) => {
     try {
       await userService.acceptFriendRequest(friendId);
       if (notificationId) await markAsRead(notificationId);
-      fetchFriends();
+      
+      // Auto-clear related notifications if any
+      const relatedNotif = notifications.find(n => n.type === 'friend_request' && n.refId === friendId && !n.isRead);
+      if (relatedNotif) await markAsRead(relatedNotif._id);
+      
+      fetchData();
     } catch (err) {
       console.error('Failed to accept friend request', err);
     }
@@ -79,7 +87,7 @@ const Contacts: React.FC = () => {
                     : 'text-on-surface-variant hover:text-on-surface'}
                 `}
               >
-                {tab === 'pending' && pendingRequests.length > 0 && (
+                {tab === 'pending' && pendingFriendRequests.length > 0 && (
                   <span className="w-2 h-2 bg-error rounded-full inline-block mr-2 animate-pulse"></span>
                 )}
                 {tab}
@@ -130,28 +138,30 @@ const Contacts: React.FC = () => {
 
           {activeTab === 'pending' && (
             <div className="space-y-4">
-              {pendingRequests.length === 0 ? (
+              {loading ? (
+                <div className="py-20 flex justify-center opacity-40">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : pendingFriendRequests.length === 0 ? (
                 <div className="py-20 text-center opacity-20">
                   <Icon name="inbox" className="text-[120px] mb-6" />
                   <h2 className="text-2xl font-black">No pending requests</h2>
                 </div>
               ) : (
-                pendingRequests.map((req) => (
-                  <div key={req._id} className="flex items-center justify-between p-6 bg-surface-container-lowest rounded-3xl border border-warning/20 shadow-sm animate-fade-in">
+                pendingFriendRequests.map((req: UserProfile) => (
+                  <div key={req.id} className="flex items-center justify-between p-6 bg-surface-container-lowest rounded-3xl border border-warning/20 shadow-sm animate-fade-in hover:shadow-md transition-shadow">
                     <div className="flex items-center space-x-5">
-                      <div className="p-3 bg-warning/10 text-warning rounded-2xl">
-                        <Icon name="person_add" className="text-2xl" />
-                      </div>
+                      <Avatar src={req.avatar} size="lg" />
                       <div>
-                        <p className="text-sm font-black text-on-surface">{req.content}</p>
-                        <p className="text-[10px] text-on-surface-variant font-bold opacity-60 mt-1 italic">
-                          {new Date(req.createdAt).toLocaleDateString()}
+                        <p className="text-sm font-black text-on-surface">{req.name}</p>
+                        <p className="text-[10px] text-warning font-bold uppercase tracking-widest mt-1">
+                          Sent you a friend request
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => handleAccept(req.refId, req._id)}
+                        onClick={() => handleAccept(req.id)}
                         className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all"
                       >
                         Accept

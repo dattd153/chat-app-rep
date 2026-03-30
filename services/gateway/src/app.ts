@@ -20,13 +20,17 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
       const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
       // Inject user ID into headers for downstream services
       req.headers['x-user-id'] = payload.userId;
+      next();
     } catch (err) {
-      // Invalid token - we don't block here, let downstream handle if needed
-      // or we could block depending on the route.
-      // For /api/auth/register or login, we shouldn't block.
+      logger.warn('Invalid token provided', { error: err });
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' }
+      });
     }
+  } else {
+    next();
   }
-  next();
 };
 
 app.use(authMiddleware);

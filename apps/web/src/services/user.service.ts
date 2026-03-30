@@ -61,5 +61,17 @@ export const userService = {
     } catch {
       return [];
     }
+  },
+
+  async getPendingRequests(): Promise<UserProfile[]> {
+    const token = localStorage.getItem('accessToken');
+    try {
+      const response = await axios.get(`${API_URL}/friends/pending`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data.data || [];
+    } catch {
+      return [];
+    }
   }
 };

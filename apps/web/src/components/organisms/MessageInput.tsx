@@ -1,17 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../atoms/Icon';
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
+  onTyping?: (isTyping: boolean) => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, onTyping }) => {
   const [message, setMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  
+  // Typing indicator logic
+  useEffect(() => {
+    if (!onTyping) return;
+
+    if (message.trim()) {
+      if (!isTyping) {
+        onTyping(true);
+        setIsTyping(true);
+      }
+
+      const timeout = setTimeout(() => {
+        onTyping(false);
+        setIsTyping(false);
+      }, 2000);
+
+      return () => clearTimeout(timeout);
+    } else {
+      if (isTyping) {
+        onTyping(false);
+        setIsTyping(false);
+      }
+    }
+  }, [message, onTyping, isTyping]);
 
   const handleSend = () => {
     if (message.trim()) {
       onSendMessage(message);
       setMessage('');
+      if (onTyping) onTyping(false);
     }
   };
 

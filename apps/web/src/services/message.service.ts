@@ -9,7 +9,7 @@ export interface Message {
   content: string;
   type: 'text' | 'image' | 'file';
   createdAt: string;
-  status: 'sent' | 'delivered' | 'read';
+  status: 'sent' | 'delivered' | 'seen';
 }
 
 export const messageService = {
