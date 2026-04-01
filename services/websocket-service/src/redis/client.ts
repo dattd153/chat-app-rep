@@ -17,8 +17,8 @@ redisClient.on('connect', () => {
  * Presence Helpers
  */
 export const setUserOnline = async (userId: string) => {
-  // Set status with 60s TTL
-  await redisClient.set(`user:status:${userId}`, 'online', 'EX', 60);
+  // TTL = 90s, refreshed every 30s by heartbeat in socket-server
+  await redisClient.set(`user:status:${userId}`, 'online', 'EX', 90);
 };
 
 export const setUserOffline = async (userId: string) => {

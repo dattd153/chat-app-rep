@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import { logger } from '@chat-app/logger';
 import jwt from 'jsonwebtoken';
 import { SocketEvents, MessageStatus } from '@chat-app/shared';
-import { redisClient, setUserOnline, setUserOffline } from '../redis/client';
+import { redisClient, setUserOnline, setUserOffline, getUserStatus } from '../redis/client';
 import { kafkaProducer } from '../services/kafka-producer';
 
 export const initSocketServer = (io: Server) => {
@@ -75,7 +75,21 @@ export const initSocketServer = (io: Server) => {
       });
     });
 
+    // Return current presence for a list of user IDs (used for initial load)
+    socket.on('GET_PRESENCE', async (userIds: string[], callback: (statuses: Record<string, string>) => void) => {
+      if (!Array.isArray(userIds) || typeof callback !== 'function') return;
+      const statuses: Record<string, string> = {};
+      await Promise.all(userIds.map(async (id) => {
+        statuses[id] = await getUserStatus(id);
+      }));
+      callback(statuses);
+    });
+
+    // Heartbeat: refresh Redis TTL every 30s so presence doesn't expire while connected
+    const heartbeat = setInterval(() => setUserOnline(userId), 30000);
+
     socket.on('disconnect', async () => {
+      clearInterval(heartbeat);
       logger.info(`User disconnected: ${userId}`);
       // 2. Presence: Remove online status
       await setUserOffline(userId);

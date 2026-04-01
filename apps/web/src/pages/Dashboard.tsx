@@ -86,6 +86,24 @@ const Dashboard: React.FC = () => {
     fetchProfiles();
   }, [chats, user]);
 
+  // Fetch initial presence for all loaded participants
+  useEffect(() => {
+    const userIds = Object.keys(participantProfiles);
+    if (!socket || userIds.length === 0) return;
+    socket.emit('GET_PRESENCE', userIds, (statuses: Record<string, 'online' | 'offline'>) => {
+      setPresence(prev => ({ ...prev, ...statuses }));
+    });
+  }, [socket, participantProfiles]);
+
+  // Sync otherUser.status with live presence state (keeps ChatHeader up-to-date)
+  useEffect(() => {
+    if (!otherUser) return;
+    const liveStatus = presence[otherUser.id];
+    if (liveStatus && liveStatus !== otherUser.status) {
+      setOtherUser(prev => prev ? { ...prev, status: liveStatus } : prev);
+    }
+  }, [presence, otherUser?.id]);
+
   // Handle auto-opening chat from URL query parameter
   useEffect(() => {
     const params = new URLSearchParams(location.search);
