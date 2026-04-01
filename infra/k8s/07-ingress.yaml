@@ -1,0 +1,61 @@
+# Yêu cầu: nginx-ingress-controller đã được cài vào cluster
+# Cài: helm install ingress-nginx ingress-nginx/ingress-nginx
+#
+# Ingress định tuyến trực tiếp:
+#   /socket.io → gateway (WebSocket upgrade, bỏ qua web Nginx)
+#   /api       → gateway (REST API, bỏ qua web Nginx)
+#   /          → web    (React static files)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chat-app-ingress
+  namespace: chat-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Tăng timeout cho WebSocket long-lived connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Bật WebSocket upgrade
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    # Sticky session cho /socket.io (dự phòng khi Redis Adapter chưa ổn định)
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "io-route"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "86400"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  rules:
+    - host: your-domain.com   # Thay bằng domain thực tế
+      http:
+        paths:
+          # WebSocket — ưu tiên match trước /api
+          - path: /socket.io(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 3000
+          # REST API
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 3000
+          # React SPA
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80
+  # Bật TLS nếu có cert (khuyến nghị production)
+  # tls:
+  #   - hosts:
+  #       - your-domain.com
+  #     secretName: chat-app-tls-secret

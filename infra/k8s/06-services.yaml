@@ -1,0 +1,481 @@
+# Thay <REGISTRY> bằng địa chỉ container registry thực tế
+# Ví dụ: docker.io/myusername  hoặc  gcr.io/my-project  hoặc  registry.gitlab.com/my-group
+#
+# Các service theo thứ tự dependency:
+#   auth-service → user-service → chat-service → message-service
+#   → websocket-service → notification-service → gateway → web
+
+# =============================================================
+# AUTH SERVICE
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: <REGISTRY>/chat-app/auth-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: JWT_SECRET
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: MONGO_URI_AUTH
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: chat-app
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# USER SERVICE
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: <REGISTRY>/chat-app/user-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: MONGO_URI_USER
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: REDIS_URL
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: chat-app
+spec:
+  selector:
+    app: user-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# CHAT SERVICE
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+    spec:
+      containers:
+        - name: chat-service
+          image: <REGISTRY>/chat-app/chat-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: MONGO_URI_CHAT
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: chat-app
+spec:
+  selector:
+    app: chat-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# MESSAGE SERVICE
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: message-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: message-service
+  template:
+    metadata:
+      labels:
+        app: message-service
+    spec:
+      containers:
+        - name: message-service
+          image: <REGISTRY>/chat-app/message-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: MONGO_URI_MESSAGE
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: message-service
+  namespace: chat-app
+spec:
+  selector:
+    app: message-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# WEBSOCKET SERVICE
+# Redis Adapter đã được cấu hình → nhiều replica chia sẻ socket
+# state qua Redis, không cần sticky session cứng
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websocket-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: websocket-service
+  template:
+    metadata:
+      labels:
+        app: websocket-service
+    spec:
+      containers:
+        - name: websocket-service
+          image: <REGISTRY>/chat-app/websocket-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: JWT_SECRET
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: REDIS_URL
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: websocket-service
+  namespace: chat-app
+spec:
+  selector:
+    app: websocket-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# NOTIFICATION SERVICE
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: <REGISTRY>/chat-app/notification-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: MONGO_URI_NOTIFICATION
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: KAFKA_BROKERS
+            - name: CHAT_SERVICE_URL
+              value: "http://chat-service:3000"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: chat-app
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+# =============================================================
+# GATEWAY
+# Entry point cho toàn bộ API và WebSocket
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: <REGISTRY>/chat-app/gateway:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: JWT_SECRET
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: chat-app-secrets
+                  key: ALLOWED_ORIGINS
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:3000"
+            - name: USER_SERVICE_URL
+              value: "http://user-service:3000"
+            - name: CHAT_SERVICE_URL
+              value: "http://chat-service:3000"
+            - name: MESSAGE_SERVICE_URL
+              value: "http://message-service:3000"
+            - name: NOTIFICATION_SERVICE_URL
+              value: "http://notification-service:3000"
+            - name: WEBSOCKET_SERVICE_URL
+              value: "http://websocket-service:3000"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: chat-app
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 3000
+      targetPort: 3000
+  # ClientIP affinity giữ WebSocket connection về cùng 1 gateway pod
+  sessionAffinity: ClientIP
+---
+# =============================================================
+# WEB APP (React + Nginx)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: chat-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: <REGISTRY>/chat-app/web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: chat-app
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
