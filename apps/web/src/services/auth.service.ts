@@ -1,41 +1,20 @@
-const API_BASE_URL = 'http://localhost:3000/api';
+import { apiClient } from '../lib/axios';
 
 export const authService = {
   async login(email: string, password: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error?.message || 'Login failed');
-    }
-    return result.data;
+    const response = await apiClient.post('/api/auth/login', { email, password });
+    // refreshToken is set as httpOnly cookie by server — not in response body
+    return response.data.data; // { user, accessToken, expiresIn }
   },
 
   async register(email: string, password: string, name: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error?.message || 'Registration failed');
-    }
-    // Register only returns userId, accessToken. 
-    // We might need to fetch the profile or just construct a partial user.
-    return result.data;
+    const response = await apiClient.post('/api/auth/register', { email, password, name });
+    // refreshToken is set as httpOnly cookie by server — not in response body
+    return response.data.data; // { userId, accessToken }
   },
 
-  async logout(refreshToken: string) {
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-  }
+  async logout() {
+    // Server clears the httpOnly cookie
+    await apiClient.post('/api/auth/logout');
+  },
 };

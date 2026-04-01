@@ -9,8 +9,17 @@ import { successResponse, errorResponse } from '@chat-app/shared';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'access_secret';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'refresh_secret';
-const ACCESS_EXPIRES = '15m'; // Default 15 mins for production
+const ACCESS_EXPIRES = '15m';
 const REFRESH_EXPIRES = '7d';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,           // JS cannot read this cookie
+  secure: IS_PROD,          // HTTPS only in production
+  sameSite: 'lax' as const, // Protects against CSRF
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+  path: '/api/auth',        // Only sent to auth endpoints
+};
 
 const generateTokens = async (user: any) => {
   const accessToken = jwt.sign(
@@ -25,7 +34,6 @@ const generateTokens = async (user: any) => {
     { expiresIn: REFRESH_EXPIRES }
   );
 
-  // Save refresh token to user (rotation support)
   user.refreshTokens.push(refreshToken);
   await user.save();
 
@@ -53,10 +61,10 @@ export const register = async (req: Request, res: Response) => {
       name: user.name,
     });
 
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
     res.status(201).send(successResponse({
       userId: user.id,
       accessToken,
-      refreshToken
     }));
   } catch (err) {
     logger.error('Registration failed', { error: err });
@@ -80,6 +88,7 @@ export const login = async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = await generateTokens(user);
 
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
     res.send(successResponse({
       user: {
         id: user.id,
@@ -88,8 +97,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role
       },
       accessToken,
-      refreshToken,
-      expiresIn: 900 // 15 mins in seconds
+      expiresIn: 900,
     }));
   } catch (err) {
     logger.error('Login failed', { error: err });
@@ -98,10 +106,10 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const refresh = async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = req.cookies?.refreshToken;
 
   if (!refreshToken) {
-    return res.status(400).send(errorResponse('MISSING_TOKEN', 'Refresh token is required'));
+    return res.status(401).send(errorResponse('MISSING_TOKEN', 'Refresh token not found'));
   }
 
   try {
@@ -112,28 +120,34 @@ export const refresh = async (req: Request, res: Response) => {
       return res.status(401).send(errorResponse('INVALID_REFRESH_TOKEN', 'Invalid or expired refresh token'));
     }
 
-    // Refresh token rotation: remove old one, add new one
-    user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
-    const tokens = await generateTokens(user);
+    // Refresh token rotation: remove old, issue new
+    user.refreshTokens = (user.refreshTokens as string[]).filter((t) => t !== refreshToken);
+    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user);
 
-    res.send(successResponse(tokens));
+    res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
+    res.send(successResponse({ accessToken }));
   } catch (err) {
     return res.status(401).send(errorResponse('INVALID_REFRESH_TOKEN', 'Invalid refresh token'));
   }
 };
 
 export const logout = async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = req.cookies?.refreshToken;
 
   try {
     if (refreshToken) {
-      const payload = jwt.verify(refreshToken, REFRESH_SECRET) as { userId: string };
-      const user = await User.findById(payload.userId);
-      if (user) {
-        user.refreshTokens = user.refreshTokens.filter(t => t !== refreshToken);
-        await user.save();
+      try {
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET) as { userId: string };
+        const user = await User.findById(payload.userId);
+        if (user) {
+          user.refreshTokens = (user.refreshTokens as string[]).filter((t) => t !== refreshToken);
+          await user.save();
+        }
+      } catch {
+        // Token already invalid — still clear the cookie
       }
     }
+    res.clearCookie('refreshToken', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
     res.send(successResponse({ message: 'Logged out successfully' }));
   } catch (err) {
     res.status(400).send(errorResponse('LOGOUT_FAILED', 'Could not logout'));
@@ -141,7 +155,6 @@ export const logout = async (req: Request, res: Response) => {
 };
 
 export const logoutAll = async (req: Request, res: Response) => {
-  // Assuming middleware adds user to req
   const userId = (req as any).user?.userId;
   if (!userId) return res.status(401).send(errorResponse('UNAUTHORIZED', 'Unauthorized'));
 
@@ -151,6 +164,7 @@ export const logoutAll = async (req: Request, res: Response) => {
       user.refreshTokens = [];
       await user.save();
     }
+    res.clearCookie('refreshToken', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
     res.send(successResponse({ message: 'All sessions revoked' }));
   } catch (err) {
     res.status(500).send(errorResponse('INTERNAL_ERROR', 'Failed to revoke sessions'));

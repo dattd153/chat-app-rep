@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '../lib/axios';
 
 const API_URL = '/api/chats';
 
@@ -18,32 +18,20 @@ export interface Chat {
 
 export const chatService = {
   async getChats(): Promise<Chat[]> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.get(API_URL, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    // The response is { success: true, data: [...] } based on our controller patterns
+    const response = await apiClient.get(API_URL);
     return response.data.data || [];
   },
 
   async createChat(participantIds: string[]): Promise<Chat> {
-    const token = localStorage.getItem('accessToken');
-    // We only need the other person's ID for direct chat creation
-    // The backend session will identify the creator
-    const response = await axios.post(API_URL, { 
-      type: 'direct', 
-      memberIds: participantIds 
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
+    const response = await apiClient.post(API_URL, {
+      type: 'direct',
+      memberIds: participantIds
     });
     return response.data.data;
   },
 
   async getChatMembers(chatId: string) {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.get(`${API_URL}/${chatId}/members`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.get(`${API_URL}/${chatId}/members`);
     return response.data.data;
   }
 };

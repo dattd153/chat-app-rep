@@ -52,6 +52,13 @@ export const startKafkaConsumer = async (io: Server) => {
                 
                 participantIds.forEach((pId: string) => {
                   io.to(`user:${pId}`).emit(SocketEvents.NEW_MESSAGE, payload);
+                  // Notify non-senders so their notification badge refreshes
+                  if (pId !== senderId) {
+                    io.to(`user:${pId}`).emit('NOTIFICATION_RECEIVED', {
+                      type: 'message',
+                      data: { chatId, messageId, senderId, content, createdAt }
+                    });
+                  }
                 });
                 logger.info(`Routed MESSAGE_CREATED to ${participantIds.length} members of chat ${chatId}`);
               }

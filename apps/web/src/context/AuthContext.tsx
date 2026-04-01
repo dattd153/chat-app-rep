@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../services/auth.service';
 
 interface User {
   id: string;
@@ -24,13 +25,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for saved auth state on mount
     const savedToken = localStorage.getItem('accessToken');
     const savedUser = localStorage.getItem('user');
 
     if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      try {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+      }
     }
     setIsLoading(false);
   }, []);
@@ -40,9 +45,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
     localStorage.setItem('accessToken', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    // refreshToken is stored as httpOnly cookie by the server — never touches JS
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authService.logout(); // server clears the httpOnly cookie
+    } catch {
+      // best-effort
+    }
     setToken(null);
     setUser(null);
     localStorage.removeItem('accessToken');
@@ -50,13 +61,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
-      login, 
-      logout, 
-      isAuthenticated: !!token, 
-      isLoading 
+    <AuthContext.Provider value={{
+      user,
+      token,
+      login,
+      logout,
+      isAuthenticated: !!token,
+      isLoading,
     }}>
       {children}
     </AuthContext.Provider>

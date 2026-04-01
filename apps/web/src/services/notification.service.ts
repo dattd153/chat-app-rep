@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '../lib/axios';
 
 const API_URL = '/api/notifications';
 
@@ -14,26 +14,17 @@ export interface Notification {
 
 export const notificationService = {
   async getNotifications(): Promise<Notification[]> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.get(API_URL, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.get(API_URL);
     return response.data.data || [];
   },
 
   async markAsRead(id: string): Promise<Notification> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.patch(`${API_URL}/${id}/read`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.patch(`${API_URL}/${id}/read`, {});
     return response.data.data;
   },
 
   async markAllAsRead(): Promise<{ success: boolean }> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.patch(`${API_URL}/read-all`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.patch(`${API_URL}/read-all`, {});
     return response.data.data;
   }
 };

@@ -1,12 +1,26 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { json } from 'body-parser';
 import { register, login, refresh, logout, logoutAll, verifyToken } from './controllers/auth.controller';
 import { logger } from '@chat-app/logger';
 
 export const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:8080,http://localhost:5173').split(',');
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. server-to-server, curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  },
+  credentials: true,
+}));
+app.use(cookieParser());
 app.use(json());
 
 // Auth Routes (Prefix /api/auth as per contract)

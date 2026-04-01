@@ -6,7 +6,18 @@ import { logger } from '@chat-app/logger';
 
 export const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:8080,http://localhost:5173').split(',');
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  },
+  credentials: true,
+}));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'access_secret';
 
@@ -43,7 +54,16 @@ const proxyOptions = (target: string) => ({
     if (req.headers['x-user-id']) {
       proxyReq.setHeader('x-user-id', req.headers['x-user-id']);
     }
-  }
+  },
+  onProxyRes: (proxyRes: any, req: any) => {
+    // Override upstream CORS headers so the browser sees the correct values.
+    // Upstream services use cors() with wildcard (*), which browsers reject
+    // when credentials are included. The gateway is the only CORS boundary.
+    const origin = (req as any).headers?.origin;
+    proxyRes.headers['access-control-allow-origin'] = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    proxyRes.headers['access-control-allow-credentials'] = 'true';
+    proxyRes.headers['vary'] = 'Origin';
+  },
 });
 
 // Proxy for Auth Service

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '../lib/axios';
 
 const API_URL = '/api/users';
 
@@ -12,11 +12,8 @@ export interface UserProfile {
 
 export const userService = {
   async getUser(userId: string): Promise<UserProfile | null> {
-    const token = localStorage.getItem('accessToken');
     try {
-      const response = await axios.get(`${API_URL}/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`${API_URL}/${userId}`);
       return response.data.data;
     } catch {
       return null;
@@ -24,11 +21,8 @@ export const userService = {
   },
 
   async searchUsers(query: string): Promise<UserProfile[]> {
-    const token = localStorage.getItem('accessToken');
     try {
-      const response = await axios.get(`${API_URL}/search?q=${query}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`${API_URL}/search?q=${query}`);
       return response.data.data || [];
     } catch {
       return [];
@@ -36,27 +30,18 @@ export const userService = {
   },
 
   async sendFriendRequest(friendId: string): Promise<{ success: boolean }> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.post(`${API_URL}/friends/request`, { friendId }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.post(`${API_URL}/friends/request`, { friendId });
     return response.data.data;
   },
 
   async acceptFriendRequest(friendId: string): Promise<{ success: boolean }> {
-    const token = localStorage.getItem('accessToken');
-    const response = await axios.post(`${API_URL}/friends/accept`, { friendId }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await apiClient.post(`${API_URL}/friends/accept`, { friendId });
     return response.data.data;
   },
 
   async getFriendList(): Promise<UserProfile[]> {
-    const token = localStorage.getItem('accessToken');
     try {
-      const response = await axios.get(`${API_URL}/friends`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`${API_URL}/friends`);
       return response.data.data || [];
     } catch {
       return [];
@@ -64,11 +49,8 @@ export const userService = {
   },
 
   async getPendingRequests(): Promise<UserProfile[]> {
-    const token = localStorage.getItem('accessToken');
     try {
-      const response = await axios.get(`${API_URL}/friends/pending`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get(`${API_URL}/friends/pending`);
       return response.data.data || [];
     } catch {
       return [];
